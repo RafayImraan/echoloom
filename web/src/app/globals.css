@@ -400,6 +400,9 @@ button,input,textarea,select{font-family:var(--sans)}
 @media(max-width:1220px){.social-layout{grid-template-columns:175px minmax(0,760px);gap:22px}.right-rail{display:none}}
 @media(max-width:760px){.social-layout{display:block}.left-rail{position:static;height:auto;max-height:none;overflow:visible;overscroll-behavior:auto}.left-rail .loom-create-trigger{position:static;width:auto;min-height:36px}.left-rail .loom-create-panel{max-height:none}.page-intro{align-items:flex-start;gap:12px}.feed-create-button{min-height:38px;padding:0 12px;font-size:11px}.verified-heading{padding-bottom:12px}.create-live-post.composer-visible{display:flex}.right-rail{display:none}}
 
+/* Keep the desktop rails proportional, with enough room for the activity card. */
+@media(min-width:1221px){.social-layout{grid-template-columns:minmax(0,30fr) minmax(0,55fr) minmax(0,15fr);gap:24px;justify-content:stretch}.left-rail,.feed-column,.right-rail,.activity-card{min-width:0}.rail-activity-list a{min-width:0}.rail-activity-list a span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rail-activity-list small{max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+
 /* Inline transaction feedback and a custom, accessible upload picker. */
 .app-notice{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:14px 0 0;padding:12px 15px;border:1px solid #e8d7d3;border-radius:12px;background:#fff;color:#39312f;box-shadow:0 4px 14px #39201b08;font-size:13px;line-height:1.5}
 .app-notice.info{border-color:#ddd9cc;background:#fffdf7}
