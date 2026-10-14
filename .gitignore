@@ -19,6 +19,7 @@ contracts/broadcast/
 web/data/
 web/tsconfig.tsbuildinfo
 /package-lock.json
+docs/
 contracts/.forge-cache/
 contracts/.forge-out/
 contracts/lib/forge-std/.github/
