@@ -48,6 +48,9 @@ NEXT_PUBLIC_ALCHEMY_API_KEY=
 # Optional alternative RPC URL, used when no Alchemy key is set.
 NEXT_PUBLIC_MONAD_RPC_URL=
 
+# Optional server-side Origin for Alchemy domain allowlists; Vercel is auto-detected.
+# ECHOLOOM_APP_BASE_URL=https://echoloom-rho.vercel.app
+
 # Optional: uncomment after applying the Supabase migration and adding credentials.
 # ECHOLOOM_STORAGE_DRIVER=supabase
 # SUPABASE_URL=

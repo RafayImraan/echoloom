@@ -1,5 +1,5 @@
 import { createPublicClient, decodeEventLog, http, parseAbi, type Address, type Hex } from 'viem';
-import { DEPLOYMENT_BLOCK, HUB, MONAD_RPC_URL, MONAD_TESTNET, publicClient, verifyHubDeployment } from '../contract';
+import { DEPLOYMENT_BLOCK, HUB, MONAD_RPC_FETCH_OPTIONS, MONAD_RPC_URL, MONAD_TESTNET, publicClient, verifyHubDeployment } from '../contract';
 import { deleteActivityAfter, readCursor, upsertActivity, writeCursor, type ActivityRecord } from './persistence';
 
 export const HUB_EVENT_ABI = parseAbi([
@@ -19,7 +19,7 @@ export const HUB_EVENT_ABI = parseAbi([
  'event PauseUpdated(bool paused)',
  'event OwnershipTransferred(address indexed previousOwner,address indexed newOwner)',
 ]);
-const chainClient=createPublicClient({chain:MONAD_TESTNET,transport:http(MONAD_RPC_URL)});
+const chainClient=createPublicClient({chain:MONAD_TESTNET,transport:http(MONAD_RPC_URL,MONAD_RPC_FETCH_OPTIONS)});
 const MAX_SYNC_BLOCK_SPAN=2000n;const MAX_RPC_BLOCK_SPAN=10n;const MAX_LOGS_PER_SYNC=1000;const SYNC_THROTTLE_MS=10_000;
 let runningSync:Promise<{scanned:number;stored:number;throughBlock:string}>|undefined;
 

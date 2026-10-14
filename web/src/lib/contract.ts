@@ -6,6 +6,12 @@ const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY?.trim();
 export const MONAD_RPC_URL = alchemyApiKey
  ? `https://monad-testnet.g.alchemy.com/v2/${alchemyApiKey}`
  : process.env.NEXT_PUBLIC_MONAD_RPC_URL?.trim() || MONAD_TESTNET.rpcUrls.default.http[0];
+const configuredServerOrigin = process.env.ECHOLOOM_APP_BASE_URL?.trim();
+const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+export const MONAD_RPC_ORIGIN = typeof window === 'undefined'
+ ? (configuredServerOrigin || (vercelHost ? `https://${vercelHost}` : 'http://localhost:3000')).replace(/\/+$/, '')
+ : undefined;
+export const MONAD_RPC_FETCH_OPTIONS = MONAD_RPC_ORIGIN ? { fetchOptions: { headers: { Origin: MONAD_RPC_ORIGIN } } } : undefined;
 const deploymentMetadata = deployment as unknown as { chainId: number; address: string | null; transactionHash: string | null; deploymentBlock: string | null };
 const envHub = process.env.NEXT_PUBLIC_ECHOLOOM_HUB?.trim() || '';
 const artifactHub = deploymentMetadata.address?.trim() || '';
@@ -35,7 +41,7 @@ export const HUB_CONFIGURATION_ERROR = deploymentMetadata.chainId !== MONAD_TEST
  : undefined;
 export const HUB: Address | undefined = !HUB_CONFIGURATION_ERROR && configuredHub ? getAddress(configuredHub) : undefined;
 export const DEPLOYMENT_BLOCK = !HUB_CONFIGURATION_ERROR && configuredBlock ? BigInt(configuredBlock) : undefined;
-export const publicClient = createPublicClient({ chain: MONAD_TESTNET, transport: http(MONAD_RPC_URL) });
+export const publicClient = createPublicClient({ chain: MONAD_TESTNET, transport: http(MONAD_RPC_URL, MONAD_RPC_FETCH_OPTIONS) });
 
 export async function verifyHubDeployment(): Promise<void> {
  if (!HUB) throw new Error(HUB_CONFIGURATION_ERROR || 'Set NEXT_PUBLIC_ECHOLOOM_HUB to enable contract interactions.');
