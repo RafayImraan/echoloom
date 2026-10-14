@@ -39,6 +39,21 @@ async function mapLimit<T,R>(items:T[],limit:number,fn:(item:T)=>Promise<R>):Pro
  const output=new Array<R>(items.length);let next=0;
  await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{while(true){const index=next++;if(index>=items.length)return;output[index]=await fn(items[index]);}}));return output;
 }
+function isRateLimited(error:unknown):boolean{
+ let current:unknown=error;
+ for(let depth=0;depth<5&&current&&typeof current==='object';depth++){
+  const item=current as {status?:unknown;message?:unknown;cause?:unknown};
+  if(item.status===429||typeof item.message==='string'&&/\b429\b|too many requests|rate limit/i.test(item.message))return true;
+  current=item.cause;
+ }
+ return false;
+}
+async function getLogsWithRetry(range:{fromBlock:bigint;toBlock:bigint}){
+ for(let attempt=0;;attempt++){
+  try{return await chainClient.getLogs({address:HUB!,events:HUB_EVENT_ABI,...range});}
+  catch(error){if(!isRateLimited(error)||attempt>=5)throw error;await new Promise(resolve=>setTimeout(resolve,500*2**attempt));}
+ }
+}
 
 async function syncOnce():Promise<{scanned:number;stored:number;throughBlock:string}>{
  if(!HUB||DEPLOYMENT_BLOCK===undefined)throw new Error('Verified Monad Testnet deployment metadata is required for activity indexing.');
@@ -60,11 +75,11 @@ async function syncOnce():Promise<{scanned:number;stored:number;throughBlock:str
  const syncEnd=from+MAX_SYNC_BLOCK_SPAN-1n<safeHead?from+MAX_SYNC_BLOCK_SPAN-1n:safeHead;
  const ranges:{fromBlock:bigint;toBlock:bigint}[]=[];
  for(let nextFrom=from;nextFrom<=syncEnd;nextFrom+=MAX_RPC_BLOCK_SPAN){ranges.push({fromBlock:nextFrom,toBlock:nextFrom+MAX_RPC_BLOCK_SPAN-1n<syncEnd?nextFrom+MAX_RPC_BLOCK_SPAN-1n:syncEnd});}
- const logChunks=await mapLimit(ranges,8,range=>chainClient.getLogs({address:hub,events:HUB_EVENT_ABI,...range}));
+ const logChunks=await mapLimit(ranges,2,getLogsWithRetry);
  const logs=logChunks.flat();const to=syncEnd;
  if(logs.length>MAX_LOGS_PER_SYNC)throw new Error(`Activity sync found over ${MAX_LOGS_PER_SYNC} hub events; cursor was not advanced.`);
  const receiptCache=new Map<string,Promise<Awaited<ReturnType<typeof publicClient.getTransactionReceipt>>>>();
- const records=await mapLimit(logs,8,async(log)=>{
+ const records=await mapLimit(logs,2,async(log)=>{
   const hash=log.transactionHash;if(!hash||log.blockNumber===null||!log.blockHash||log.logIndex===null)throw new Error('RPC returned an incomplete event log; cursor was not advanced.');
   let pending=receiptCache.get(hash);if(!pending){pending=publicClient.getTransactionReceipt({hash});receiptCache.set(hash,pending);}const [receipt,tx]=await Promise.all([pending,publicClient.getTransaction({hash})]);
   if(receipt.status!=='success'||tx.to?.toLowerCase()!==hub.toLowerCase()||receipt.blockNumber!==log.blockNumber||receipt.blockHash.toLowerCase()!==log.blockHash.toLowerCase())throw new Error(`Event transaction ${hash} failed receipt verification.`);
