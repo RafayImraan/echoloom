@@ -7,9 +7,10 @@ export const MONAD_RPC_URL = alchemyApiKey
  ? `https://monad-testnet.g.alchemy.com/v2/${alchemyApiKey}`
  : process.env.NEXT_PUBLIC_MONAD_RPC_URL?.trim() || MONAD_TESTNET.rpcUrls.default.http[0];
 const configuredServerOrigin = process.env.ECHOLOOM_APP_BASE_URL?.trim();
-const vercelHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() || process.env.VERCEL_URL?.trim();
+const vercelProductionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
+const defaultServerOrigin = process.env.NODE_ENV === 'production' ? 'https://echoloom-rho.vercel.app' : 'http://localhost:3000';
 export const MONAD_RPC_ORIGIN = typeof window === 'undefined'
- ? (configuredServerOrigin || (vercelHost ? `https://${vercelHost}` : 'http://localhost:3000')).replace(/\/+$/, '')
+ ? (configuredServerOrigin || (vercelProductionHost ? `https://${vercelProductionHost}` : defaultServerOrigin)).replace(/\/+$/, '')
  : undefined;
 export const MONAD_RPC_FETCH_OPTIONS = MONAD_RPC_ORIGIN ? { fetchOptions: { headers: { Origin: MONAD_RPC_ORIGIN } } } : undefined;
 const deploymentMetadata = deployment as unknown as { chainId: number; address: string | null; transactionHash: string | null; deploymentBlock: string | null };
