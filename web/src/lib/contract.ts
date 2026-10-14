@@ -2,6 +2,10 @@ import { createPublicClient, createWalletClient, custom, getAddress, http, isAdd
 import deployment from '../../deployment.json';
 
 export const MONAD_TESTNET = { id: 10143, name: 'Monad Testnet', nativeCurrency: { name: 'MON', symbol: 'MON', decimals: 18 }, rpcUrls: { default: { http: ['https://testnet-rpc.monad.xyz'] } }, blockExplorers: { default: { name: 'Monad Explorer', url: 'https://testnet.monadscan.com' } } } as const;
+const alchemyApiKey = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY?.trim();
+export const MONAD_RPC_URL = alchemyApiKey
+ ? `https://monad-testnet.g.alchemy.com/v2/${alchemyApiKey}`
+ : process.env.NEXT_PUBLIC_MONAD_RPC_URL?.trim() || MONAD_TESTNET.rpcUrls.default.http[0];
 const deploymentMetadata = deployment as unknown as { chainId: number; address: string | null; transactionHash: string | null; deploymentBlock: string | null };
 const envHub = process.env.NEXT_PUBLIC_ECHOLOOM_HUB?.trim() || '';
 const artifactHub = deploymentMetadata.address?.trim() || '';
@@ -31,7 +35,7 @@ export const HUB_CONFIGURATION_ERROR = deploymentMetadata.chainId !== MONAD_TEST
  : undefined;
 export const HUB: Address | undefined = !HUB_CONFIGURATION_ERROR && configuredHub ? getAddress(configuredHub) : undefined;
 export const DEPLOYMENT_BLOCK = !HUB_CONFIGURATION_ERROR && configuredBlock ? BigInt(configuredBlock) : undefined;
-export const publicClient = createPublicClient({ chain: MONAD_TESTNET, transport: http(process.env.NEXT_PUBLIC_MONAD_RPC_URL || MONAD_TESTNET.rpcUrls.default.http[0]) });
+export const publicClient = createPublicClient({ chain: MONAD_TESTNET, transport: http(MONAD_RPC_URL) });
 
 export async function verifyHubDeployment(): Promise<void> {
  if (!HUB) throw new Error(HUB_CONFIGURATION_ERROR || 'Set NEXT_PUBLIC_ECHOLOOM_HUB to enable contract interactions.');

@@ -1,5 +1,5 @@
 import { createPublicClient, decodeEventLog, http, parseAbi, type Address, type Hex } from 'viem';
-import { DEPLOYMENT_BLOCK, HUB, MONAD_TESTNET, publicClient, verifyHubDeployment } from '../contract';
+import { DEPLOYMENT_BLOCK, HUB, MONAD_RPC_URL, MONAD_TESTNET, publicClient, verifyHubDeployment } from '../contract';
 import { deleteActivityAfter, readCursor, upsertActivity, writeCursor, type ActivityRecord } from './persistence';
 
 export const HUB_EVENT_ABI = parseAbi([
@@ -19,8 +19,8 @@ export const HUB_EVENT_ABI = parseAbi([
  'event PauseUpdated(bool paused)',
  'event OwnershipTransferred(address indexed previousOwner,address indexed newOwner)',
 ]);
-const chainClient=createPublicClient({chain:MONAD_TESTNET,transport:http(process.env.NEXT_PUBLIC_MONAD_RPC_URL||MONAD_TESTNET.rpcUrls.default.http[0])});
-const MAX_SYNC_BLOCK_SPAN=2000n;const MAX_RPC_BLOCK_SPAN=100n;const MAX_LOGS_PER_SYNC=1000;const SYNC_THROTTLE_MS=10_000;
+const chainClient=createPublicClient({chain:MONAD_TESTNET,transport:http(MONAD_RPC_URL)});
+const MAX_SYNC_BLOCK_SPAN=2000n;const MAX_RPC_BLOCK_SPAN=10n;const MAX_LOGS_PER_SYNC=1000;const SYNC_THROTTLE_MS=10_000;
 let runningSync:Promise<{scanned:number;stored:number;throughBlock:string}>|undefined;
 
 function scalarArgs(args:Record<string,unknown>):ActivityRecord['args']{
@@ -58,14 +58,11 @@ async function syncOnce():Promise<{scanned:number;stored:number;throughBlock:str
  const safeHead=head>5n?head-5n:0n;
  if(from>safeHead)return{scanned:0,stored:0,throughBlock:cursor?.blockNumber||String(DEPLOYMENT_BLOCK-1n)};
  const syncEnd=from+MAX_SYNC_BLOCK_SPAN-1n<safeHead?from+MAX_SYNC_BLOCK_SPAN-1n:safeHead;
- let to=from-1n;let nextFrom=from;const logs:Awaited<ReturnType<typeof chainClient.getLogs>>=[];
- while(nextFrom<=syncEnd&&logs.length<MAX_LOGS_PER_SYNC){
-  let chunkEnd=nextFrom+MAX_RPC_BLOCK_SPAN-1n<syncEnd?nextFrom+MAX_RPC_BLOCK_SPAN-1n:syncEnd;
-  let chunk=await chainClient.getLogs({address:hub,events:HUB_EVENT_ABI,fromBlock:nextFrom,toBlock:chunkEnd});
-  while(logs.length+chunk.length>MAX_LOGS_PER_SYNC&&chunkEnd>nextFrom){chunkEnd=nextFrom+(chunkEnd-nextFrom)/2n;chunk=await chainClient.getLogs({address:hub,events:HUB_EVENT_ABI,fromBlock:nextFrom,toBlock:chunkEnd});}
-  if(logs.length+chunk.length>MAX_LOGS_PER_SYNC)throw new Error(`A single block contains over ${MAX_LOGS_PER_SYNC} hub events; activity cursor was not advanced.`);
-  logs.push(...chunk);to=chunkEnd;nextFrom=chunkEnd+1n;
- }
+ const ranges:{fromBlock:bigint;toBlock:bigint}[]=[];
+ for(let nextFrom=from;nextFrom<=syncEnd;nextFrom+=MAX_RPC_BLOCK_SPAN){ranges.push({fromBlock:nextFrom,toBlock:nextFrom+MAX_RPC_BLOCK_SPAN-1n<syncEnd?nextFrom+MAX_RPC_BLOCK_SPAN-1n:syncEnd});}
+ const logChunks=await mapLimit(ranges,8,range=>chainClient.getLogs({address:hub,events:HUB_EVENT_ABI,...range}));
+ const logs=logChunks.flat();const to=syncEnd;
+ if(logs.length>MAX_LOGS_PER_SYNC)throw new Error(`Activity sync found over ${MAX_LOGS_PER_SYNC} hub events; cursor was not advanced.`);
  const receiptCache=new Map<string,Promise<Awaited<ReturnType<typeof publicClient.getTransactionReceipt>>>>();
  const records=await mapLimit(logs,8,async(log)=>{
   const hash=log.transactionHash;if(!hash||log.blockNumber===null||!log.blockHash||log.logIndex===null)throw new Error('RPC returned an incomplete event log; cursor was not advanced.');
