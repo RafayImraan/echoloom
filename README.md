@@ -1,22 +1,33 @@
 # EchoLoom
 
-EchoLoom is a Monad Testnet app for community feeds (Looms), posts, MON stakes, tips, and funded rewards. It uses a Solidity hub and a Next.js client.
+EchoLoom is a community publishing app built for **Monad Testnet**. People create communities called **Looms**, publish text or image posts, and support posts with MON stakes, tips, and funded rewards.
 
-## Status
+## What it does
 
-`web/deployment.json` records a Monad Testnet deployment address, transaction hash, and block. The frontend checks the configured chain, runtime code, and deployment receipt before enabling on-chain actions. This repository has not received an independent professional audit, and the metadata record alone is not a fresh live-chain verification.
+- Create and browse community Looms.
+- Publish posts with content stored locally during development, on Supabase Storage, or on IPFS through Pinata.
+- Verify and display post content against its on-chain SHA-256 digest.
+- Stake MON on posts, tip creators, fund reward pools, claim eligible rewards, and withdraw funds.
+- Index confirmed contract events for the recent activity feed.
+- Connect an injected EVM wallet, such as MetaMask, on Monad Testnet.
 
-## Architecture
+## How rewards work
 
-- `contracts/`: Solidity hub, Foundry test suite, deployment script.
-- `web/`: Next.js App Router client with injected-wallet support, persistent activity, and content uploads.
-- `docs/`: architecture, security, tokenomics, and deployment instructions.
+Staked MON is principal and is not slashed. A supporter can withdraw their stake after the Loom's staking window closes. Rewards are a separate pool funded with MON and distributed according to the shares configured for that Loom. Tips are sent to creators, subject to the contract's protocol fee. Rewards and tips are not guaranteed returns.
 
-Funds use pull accounting. A post stake is principal and is never slashed; it can be withdrawn after its Loom's staking window. A separately funded pool is split among the post creator, Loom curator, and stakers, using the percentages configured when the Loom was created. Staker claims are proportional to recorded stake. No rank or engagement score mints or transfers funds.
+## Tech stack
 
-## Windows setup
+- **Web app:** Next.js App Router, React, TypeScript, and viem (`web/`)
+- **Smart contract:** Solidity and Foundry (`contracts/`)
+- **Persistent hosted storage:** Supabase SQL and Storage (`supabase/migrations/`)
+- **Optional RPC provider:** Alchemy Monad Testnet Node API
+- **Optional IPFS uploads:** Pinata
 
-Prerequisites: Node.js 22.13+ (for the built-in TypeScript server-test runner), npm, and (for Solidity tests/deployments) Foundry plus forge-std. The contract build uses the exact Solidity 0.8.24 compiler required by `contracts/foundry.toml` (optimizer enabled, 200 runs, `via_ir = true`).
+The deployed hub's chain ID, address, deployment transaction, and block are recorded in [`web/deployment.json`](web/deployment.json). The app checks the network and deployment metadata before enabling contract actions.
+
+## Run locally
+
+Requirements: Node.js and npm. Foundry is needed only to build or test the contracts.
 
 ```powershell
 cd web
@@ -24,30 +35,66 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Open `http://localhost:3000`. Connect an injected wallet, then create a Loom or use the confirmed on-chain posts. After deployment metadata is configured, the app discovers Looms and posts and enables post creation, staking, tipping, reward funding and claims, stake withdrawal, and tip withdrawal. Writes show confirmation only after a successful receipt. `contracts/script/Record-Deployment.ps1` records the actual deployment address, transaction, and block in `web/deployment.json`.
+Open [http://localhost:3000](http://localhost:3000). Connect a wallet configured for Monad Testnet (chain ID `10143`) to use on-chain features.
 
-## Contracts
+### Optional environment settings
 
-```powershell
-cd contracts
-& "$env:USERPROFILE\.foundry\bin\forge.exe" build --use "$env:USERPROFILE\.solc-select\artifacts\solc-0.8.24\solc-0.8.24"
-& "$env:USERPROFILE\.foundry\bin\forge.exe" test --use "$env:USERPROFILE\.solc-select\artifacts\solc-0.8.24\solc-0.8.24" -vv
+Create `web/.env.local` only for the services you want to use. The app uses the public Monad Testnet RPC by default.
+
+```dotenv
+# Optional Alchemy Monad Testnet RPC. Takes precedence over NEXT_PUBLIC_MONAD_RPC_URL.
+NEXT_PUBLIC_ALCHEMY_API_KEY=
+
+# Optional alternative RPC URL, used when no Alchemy key is set.
+NEXT_PUBLIC_MONAD_RPC_URL=
+
+# Optional: uncomment after applying the Supabase migration and adding credentials.
+# ECHOLOOM_STORAGE_DRIVER=supabase
+# SUPABASE_URL=
+# SUPABASE_SERVICE_ROLE_KEY=
+# SUPABASE_CONTENT_BUCKET=echoloom-content
+
+# Optional: choose Pinata for IPFS uploads instead of Supabase Storage.
+# ECHOLOOM_STORAGE_DRIVER=pinata
+# PINATA_JWT=
 ```
 
-The recorded Phase 3 run used Foundry 1.8.5 and Solidity 0.8.24: 20 tests passed, including a 256-run fuzz property. See [verification report](docs/VERIFICATION_REPORT.md) for exact commands, reproducibility evidence, and static-analysis findings.
+Apply [`supabase/migrations/202610140001_echoloom_persistent_storage.sql`](supabase/migrations/202610140001_echoloom_persistent_storage.sql) to the Supabase project before enabling the `supabase` storage driver. Keep `SUPABASE_SERVICE_ROLE_KEY` and `PINATA_JWT` server-side; never use a `NEXT_PUBLIC_` prefix for them. The Alchemy key is browser-visible by design, so restrict its allowed origins to your local or deployed app domains in Alchemy.
 
-## Testnet deployment
+With the default `local` storage driver, activity and uploads use the local development filesystem. That storage is not durable across serverless deployments. Use Supabase for hosted persistent activity/storage, or Pinata for IPFS content uploads. Pinata does not replace persistent activity storage.
 
-Target is Monad Testnet only (chain ID 10143, `https://testnet-rpc.monad.xyz`). The script checks chain ID and RPC URL, reads `DEPLOYER_PRIVATE_KEY` from the process environment, checks deployer balance, and uses the no-argument constructor. See [deployment instructions](docs/DEPLOYMENT.md). Use only expendable test MON and a dedicated test wallet.
+## Deploy to Vercel
 
-The live feed synchronizes confirmed hub events through server API routes into persistent storage. See [content and activity setup](docs/INDEXING.md). Users may explicitly upload public PNG/JPEG/WebP/GIF images (5 MiB max) or UTF-8 text/Markdown (256 KiB max). Local uploads are development-only and cannot be published. For publishable IPFS uploads, set server-only `ECHOLOOM_STORAGE_DRIVER=pinata` and `PINATA_JWT`; the app validates Pinata's returned CIDv1 and writes `ipfs://<CID>` plus the versioned SHA-256 digest into the existing post form. Uploading and creating an on-chain post are separate actions. The contract already accepts URI and hash, so no redeployment is required. Hashes and CIDs do not prove authorship or originality, and pinning alone is not a permanence guarantee. Explorer: `https://testnet.monadscan.com`.
+1. Import this repository into Vercel and set **Root Directory** to `web`.
+2. Add the required environment variables for the selected hosted storage provider in **Project Settings > Environment Variables**.
+3. Optionally add `NEXT_PUBLIC_ALCHEMY_API_KEY` for Alchemy Monad Testnet RPC and restrict the key to the deployed domain.
+4. Deploy, then connect a wallet on Monad Testnet and verify Looms, posts, and recent activity.
 
-## Configuration
+Do not add `.env.local`, `contracts/.env`, private keys, service-role keys, or Pinata JWTs to Git. The repository ignore rules exclude environment files.
 
-Local mode needs no environment file, account, or secret. For IPFS uploads, set `ECHOLOOM_STORAGE_DRIVER=pinata` and the server-only `PINATA_JWT` in `web/.env.local`. Supabase hosted activity/storage uses server-only `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Never expose provider credentials through `NEXT_PUBLIC_` variables.
+## Development checks
 
-## Economics and limits
+From `web/`:
 
-Read [TOKENOMICS](docs/TOKENOMICS.md), [SECURITY](docs/SECURITY.md), and [DEPLOYMENT](docs/DEPLOYMENT.md). Tips have a configurable protocol fee and use pull withdrawals. Reward pools must be funded with actual MON. Positions must reach their deadline before principal withdrawal and reward claims. No APY or guaranteed return is promised.
+```powershell
+npm.cmd run typecheck
+npm.cmd run test:server
+npm.cmd run build
+```
 
-The app requires a verified Monad Testnet deployment before on-chain posts and wallet actions are available.
+Build and test the Solidity contracts from `contracts/` with Foundry:
+
+```powershell
+forge build
+forge test -vv
+```
+
+The contract project uses Solidity `0.8.24` with optimizer enabled and `via_ir = true`, as configured in `contracts/foundry.toml`.
+
+## Project layout
+
+```text
+contracts/                 Solidity hub, Foundry tests, deployment scripts
+supabase/migrations/       Supabase schema and storage setup
+web/                       Next.js app, API routes, and deployment metadata
+```
